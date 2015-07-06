@@ -1,0 +1,132 @@
+#!/usr/bin/env perl
+
+=head1 NAME
+
+xdedupe - Deduplicate data from an Event table
+
+=head1 SYNOPSIS
+
+Use this program to deduplicate data in an site's Event table
+
+xdedupe -site=S -start_time=1hour -end_time=0seconds
+
+ Options:
+  -site           the url or ID of the site being measured
+  -help or -?     display this help message
+
+=head1 DESCRIPTION
+
+B<xtract> extracts data from a stats database.
+
+=cut
+
+use strict;
+
+BEGIN {
+    $ENV{SERVER_HOME} ||= $ENV{HOME} . '/sitestats-server';
+    $ENV{CONFIG_DIR}="$ENV{SERVER_HOME}/config";
+}
+
+use lib "$ENV{SERVER_HOME}/perl/lib";
+use Utils::Env; Utils::Env->setup();
+use Getopt::Long;
+use Pod::Usage;
+use Data::Site;
+use Server::DataServer;
+
+# Get the site's ID or url
+
+my ($site, $help);
+GetOptions("site=s"         => \$site,
+           "help|?"         => \$help) or pod2usage(2);
+pod2usage(1) if $help or !$site;
+
+# A function to deduplicate events
+
+sub find_duplicate_events
+{
+    my ($query) = @_;
+
+    my @duplicates = ();
+    my $last_row = {};
+    my $rows = 0;
+    while (my $row = $query->fetchrow_hashref())
+    {
+        if ($last_row->{visit_id} eq $row->{visit_id}
+        &&  $last_row->{time} == $row->{time}
+        &&  $last_row->{name} eq $row->{name}
+        &&  $last_row->{description} eq $row->{description}
+        &&  $last_row->{referrer} eq $row->{referrer}
+        &&  $last_row->{type_id} == $row->{type_id}
+        &&  $last_row->{channel_id} == $row->{channel_id})
+        {
+            push @duplicates, $row;
+        }
+        $last_row = $row;
+        $rows++;
+    }
+
+    return ($rows, @duplicates);
+}
+
+# Get the site
+
+Data::Site->connect();
+$site = Data::Site->select('site_id = ? or url like ?', $site, '%'.$site);
+Data::Site->disconnect();
+pod2usage(1) unless $site->{site_id};
+
+# Open a MySQL session for the site's stats database
+
+my $site_id = $site->{site_id};
+my $database = "stats$site_id";
+my $data_server = $site->data_server();
+
+# Deduplicate the event table
+
+my $database = $site->database();
+my $time = time();
+my $events;
+my @duplicates = ();
+my @new_duplicates = ();
+do # it a day at a time
+{
+    $time -= 86400;
+    my $event_query = $data_server->sql("select * from $database.Event where time between ? and ? order by visit_id, time", $time, $time + 86400);
+    ($events, @new_duplicates) = find_duplicate_events($event_query);
+    my $dupes = scalar @new_duplicates;
+    print "Found $dupes duplicates in $events events at time $time\n";
+    push @duplicates, @new_duplicates;
+}
+while ($events > 0);
+
+foreach my $event (@duplicates)
+{
+    my $event_id = $event->{event_id};
+    print "Deleting duplicate event $event_id\n";
+    $data_server->sql("delete from $database.Event where event_id = ?", $event_id);
+}
+
+__END__
+
+=head1 DEPENDENCIES
+
+Getopt::Long, Pod::Usage, Data::Site, Server::DataServer
+
+=head1 AUTHOR
+
+Kevin Hutchinson (kevin.hutchinson@legendum.com)
+
+=head1 COPYRIGHT
+
+Copyright (c) 2015 Legendum Ltd (UK)
+
+This program is free software; you can redistribute it and/or
+modify it under the terms of the GNU General Public License
+as published by the Free Software Foundation; either version 3
+of the License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU General Public License for more details.

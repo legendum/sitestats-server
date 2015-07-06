@@ -1,0 +1,104 @@
+#!/usr/bin/env perl
+
+=head1 NAME
+
+xport - Extract data from a stats database
+
+=head1 SYNOPSIS
+
+Use this program to extract data from a stats database
+
+xport -host=somewhere.com -username=fred -password=blogs -source_dir=/etc/files -dest_dir=sent/files
+
+ Options:
+  -host           the host receiving the files via FTP
+  -username       the username for logging into FTP
+  -password       the password for logging into FTP
+  -source_dir     the directory to find the files to be sent via FTP
+  -dest_dir       the directory to put the files via FTP
+  -keep_files     "yes" to keep the files, otherwise they're deleted
+  -help or -?     display this help message
+
+=head1 DESCRIPTION
+
+B<xtract> extracts data from a stats database.
+
+=cut
+
+use strict;
+
+BEGIN {
+    $ENV{SERVER_HOME} ||= $ENV{HOME} . '/sitestats-server';
+    $ENV{CONFIG_DIR}="$ENV{SERVER_HOME}/config";
+}
+
+use lib "$ENV{SERVER_HOME}/perl/lib";
+use Utils::Env; Utils::Env->setup();
+use Getopt::Long;
+use Pod::Usage;
+use Net::FTP;
+
+# Get the site's ID or url
+
+my ($host, $username, $password, $source_dir, $dest_dir, $keep_files, $help);
+GetOptions("host=s"         => \$host,
+           "username=s"     => \$username,
+           "password=s"     => \$password,
+           "source_dir:s"   => \$source_dir,
+           "dest_dir:s"     => \$dest_dir,
+           "keep_files:s"   => \$keep_files,
+           "help|?"         => \$help) or pod2usage(2);
+pod2usage(1) if $help or !$host or !$username or !$password;
+
+# Connect to the host and login
+
+my $ftp = Net::FTP->new($host) or die "Cannot connect to $host: $@";
+$ftp->login($username, $password) or die "Cannot login " . $ftp->message;
+
+# Change to the destination directory
+
+if ($dest_dir)
+{
+    $ftp->cwd($dest_dir)
+        or die "Cannot change working directory " . $ftp->message;
+}
+
+# Read all the files in the source directory
+
+$source_dir ||= '.';
+opendir (DIR, $source_dir);
+my @files = grep /^stats\d+\.(Visit|Event)\.\d+\.\d+\.csv$/, readdir(DIR);
+closedir DIR;
+
+# Put all the files using FTP, deleting them after they've been sent
+
+foreach my $file (@files)
+{
+    my $path = "$source_dir/$file";
+    $ftp->put($path);
+    unlink $path unless $keep_files;
+}
+
+__END__
+
+=head1 DEPENDENCIES
+
+Getopt::Long, Pod::Usage, Net::FTP
+
+=head1 AUTHOR
+
+Kevin Hutchinson (kevin.hutchinson@legendum.com)
+
+=head1 COPYRIGHT
+
+Copyright (c) 2015 Legendum Ltd (UK)
+
+This program is free software; you can redistribute it and/or
+modify it under the terms of the GNU General Public License
+as published by the Free Software Foundation; either version 3
+of the License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU General Public License for more details.

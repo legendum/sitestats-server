@@ -1,0 +1,80 @@
+#!/usr/bin/env perl
+
+=head1 NAME
+
+xsql - Open a MySQL session to a data server
+
+=head1 SYNOPSIS
+
+Use this program to open a MySQL session to a data server:
+
+xsql -server=S
+
+ Options:
+  -server         the name or hostname of the data server
+  -database       the database (optional)
+  -help or -?     display this help message
+
+=head1 DESCRIPTION
+
+B<xsql> opens a MySQL session to a data server.
+
+=cut
+
+use strict;
+
+BEGIN {
+    $ENV{SERVER_HOME} ||= $ENV{HOME} . '/sitestats-server';
+    $ENV{CONFIG_DIR}="$ENV{SERVER_HOME}/config";
+}
+
+use lib "$ENV{SERVER_HOME}/perl/lib";
+use Utils::Env; Utils::Env->setup();
+use Getopt::Long;
+use Pod::Usage;
+use Server::DataServer;
+
+# Get the servers's name or hostname
+
+my ($server, $database, $help);
+GetOptions("server=s"   => \$server,
+           "database:s" => \$database,
+           "help|?"     => \$help) or pod2usage(2);
+pod2usage(1) if $help or !$server;
+
+# Get the site
+
+$database ||= 'site';
+my $ds = Server::DataServer->new($server);
+my $username = $ds->{username} or die "no username";
+my $password = $ds->{password} or die "no password";
+my $host = $ds->{host} or die "no host";
+
+# Open a MySQL session for a database on a remote data server
+
+print("mysql -u$username -p$password -h$host $database\n");
+exec("mysql -u$username -p$password -h$host $database");
+
+__END__
+
+=head1 DEPENDENCIES
+
+Getopt::Long, Pod::Usage, Data::Site
+
+=head1 AUTHOR
+
+Kevin Hutchinson (kevin.hutchinson@legendum.com)
+
+=head1 COPYRIGHT
+
+Copyright (c) 2015 Legendum Ltd (UK)
+
+This program is free software; you can redistribute it and/or
+modify it under the terms of the GNU General Public License
+as published by the Free Software Foundation; either version 3
+of the License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU General Public License for more details.

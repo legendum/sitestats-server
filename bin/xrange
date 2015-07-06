@@ -1,0 +1,97 @@
+#!/usr/bin/env perl
+
+=head1 NAME
+
+xrange - Get a Unix epoch time range for a particular date
+
+=head1 SYNOPSIS
+
+Use this program to find out the Unix epoch times for a particular date:
+
+xrange [-date=YYYYMMDD/N] [-site=url/ID]
+
+ Options:
+  -date           the date in YYYYMMDD format or a number of days ago (N)
+  -site           the url or ID of a measured web site (optional)
+  -help or -?     display this help message
+
+=head1 DESCRIPTION
+
+B<xrange> displays a Unix epoch time range for a particular date.
+The Unix epoch time is the number of seconds since 1/1/1970, UTC.
+
+=cut
+
+use strict;
+
+BEGIN {
+    $ENV{SERVER_HOME} ||= $ENV{HOME} . '/sitestats-server';
+    $ENV{CONFIG_DIR}="$ENV{SERVER_HOME}/config";
+}
+
+use lib "$ENV{SERVER_HOME}/perl/lib";
+use Utils::Env; Utils::Env->setup();
+use Getopt::Long;
+use Pod::Usage;
+use Data::Site;
+use Utils::Time;
+use Time::Local;
+
+my ($date, $site_id, $help);
+GetOptions("date:i"     => \$date,
+           "site:s"     => \$site_id,
+           "help|?"     => \$help) or pod2usage(2);
+pod2usage(1) if $help;
+
+# Get the date
+
+if ($date < 20000000)
+{
+    my ($year, $month, $day) = (gmtime(time() - $date * Utils::Time::DAY_SECS))[5, 4, 3];
+    $date = sprintf("%04d%02d%02d", $year+1900, $month+1, $day);
+}
+
+# Get the optional site
+
+my $time_zone = 0;
+if ($site_id)
+{
+    Data::Site->connect();
+    my $site = Data::Site->select('site_id = ? or url like ?', $site_id, '%'.$site_id);
+    $time_zone = $site->{time_zone};
+    Data::Site->disconnect();
+
+    # Apply any daylight saving time to the time zone
+
+    $time_zone++ if $site->{daylight_saving} eq 'Y';
+}
+
+# Print the Unix time range for the date
+
+my ($year, $month, $day) = ($1, $2, $3) if $date =~ /(\d{4})(\d{2})(\d{2})/;
+my $start_time = timegm(0, 0, 0, $day, $month-1, $year-1900) - $time_zone * Utils::Time::HOUR_SECS;
+my $end_time = timegm(59, 59, 23, $day, $month-1, $year-1900) - $time_zone * Utils::Time::HOUR_SECS;
+
+print "$3/$2/$1 ranges between $start_time and $end_time\n" if $date =~ /(\d{4})(\d{2})(\d{2})/;
+
+=head1 DEPENDENCIES
+
+Getopt::Long, Pod::Usage, Data::Site, Utils::Time, Time::Local
+
+=head1 AUTHOR
+
+Kevin Hutchinson (kevin.hutchinson@legendum.com)
+
+=head1 COPYRIGHT
+
+Copyright (c) 2015 Legendum Ltd (UK)
+
+This program is free software; you can redistribute it and/or
+modify it under the terms of the GNU General Public License
+as published by the Free Software Foundation; either version 3
+of the License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU General Public License for more details.

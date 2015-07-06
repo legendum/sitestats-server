@@ -1,0 +1,91 @@
+#!/usr/bin/env perl
+
+=head1 NAME
+
+xsites - Display a list of non-suspended sites matching criteria
+
+=head1 SYNOPSIS
+
+Use this program to display a list of site IDs matching some SQL:
+
+xsites -where="reseller_id = 1"
+
+ Options:
+  -where          the SQL where clause to use
+  -help or -?     display this help message
+
+=head1 DESCRIPTION
+
+B<xsites> displays a list of non-suspended sites matching criteria.
+
+=cut
+
+use strict;
+
+BEGIN {
+    $ENV{SERVER_HOME} ||= $ENV{HOME} . '/sitestats-server';
+    $ENV{CONFIG_DIR}="$ENV{SERVER_HOME}/config";
+}
+
+use lib "$ENV{SERVER_HOME}/perl/lib";
+use Utils::Env; Utils::Env->setup();
+use Getopt::Long;
+use Pod::Usage;
+use Data::Site;
+
+# Get the where clause SQL
+
+my ($where, $fields, $separator, $help);
+GetOptions("where:s"    => \$where,
+           "fields:s"   => \$fields,
+           "separator:s"=> \$separator,
+           "help|?"     => \$help) or pod2usage(2);
+pod2usage(1) if $help;
+
+# Get a list of sites matching the where clause
+
+my $sql = ($where || '1=1') . ' and status <> "S"';
+my @sites;
+Data::Site->connect();
+for (my $site = Data::Site->select($sql);
+        $site->{site_id};
+        $site = Data::Site->next($sql))
+{
+    push @sites, $site;
+}
+Data::Site->disconnect();
+
+# Display fields from the list of sites
+
+my @fields = split /,/, "site_id,$fields";
+$separator ||= ',';
+print join("\n", map {
+    my $out = '';
+    foreach my $field (@fields) { $out .= $_->{$field} . $separator }
+    $out =~ s/$separator$//;
+    $out;
+} @sites) . "\n";
+
+__END__
+
+=head1 DEPENDENCIES
+
+Getopt::Long, Pod::Usage, Data::Site
+
+=head1 AUTHOR
+
+Kevin Hutchinson (kevin.hutchinson@legendum.com)
+
+=head1 COPYRIGHT
+
+Copyright (c) 2015 Legendum Ltd (UK)
+
+This program is free software; you can redistribute it and/or
+modify it under the terms of the GNU General Public License
+as published by the Free Software Foundation; either version 3
+of the License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU General Public License for more details.

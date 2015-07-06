@@ -1,0 +1,152 @@
+#!/usr/bin/env perl
+
+=head1 NAME
+
+xtables - Check for database tables
+
+=head1 SYNOPSIS
+
+Use this program to check for database tables
+
+xtables [-site=S]
+
+ Options:
+  -site           the url or ID of the site to check
+  -help or -?     display this help message
+
+=head1 DESCRIPTION
+
+B<xtables> checks for database tables
+
+=cut
+
+use strict;
+
+BEGIN {
+    $ENV{SERVER_HOME} ||= $ENV{HOME} . '/sitestats-server';
+    $ENV{CONFIG_DIR}="$ENV{SERVER_HOME}/config";
+}
+
+use lib "$ENV{SERVER_HOME}/perl/lib";
+use Utils::Env; Utils::Env->setup();
+use Getopt::Long;
+use Pod::Usage;
+use Data::Site;
+use Server::DataServer;
+
+my @page_fields = qw(page_id url url_thumb last_seen days_seen title keywords description content failures);
+my @user_fields = qw(user_id visit_id global_id field value);
+my @visit_fields = qw(visit_id user_id global_id cookies java javascript browser city region country language latitude longitude time_zone color_bits resolution op_sys host_ip host referrer search flash netspeed campaign user_agent time);
+my @event_fields = qw(visit_id channel_id time name type_id refer_id class msecs referrer description user_id);
+my @stats_fields = qw(the_date channel_id report_id field value);
+my @traffic_fields = qw(visit_id user_id time hits duration sequence classes channels campaign commerce);
+my @traffic_stats_fields = qw(visit_id user_id time channel_id duration event0 event1 event2 event3 event4 event5 event6 event7 event8 event9 event10 event11 event12 event13 event14 event15);
+
+# Get a list of all live site IDs
+
+sub all_site_ids
+{
+    my $option = shift;
+    my @site_ids = ();
+    Data::Site->connect();
+    my $sql = "status <> 'S'";
+    $sql .= " and data_server like '$ENV{HOSTNAME}%'" if $option eq 'local';
+    for (my $site = Data::Site->select($sql);
+            $site->{site_id};
+            $site = Data::Site->next($sql))
+    {
+        push @site_ids, $site->{site_id};
+    }
+    Data::Site->disconnect();
+    return @site_ids;
+}
+
+# Get a hash of field types
+
+sub field_types
+{
+    my ($ds, $table) = @_;
+    my $query = $ds->sql("desc $table");
+    my %field_types;
+    while (my $row = $query->fetchrow_hashref())
+    {
+        my $field = $row->{Field};
+        my $type = $row->{Type};
+        $field_types{$field} = $type;
+    }
+    return \%field_types;
+}
+
+# Check some database fields
+
+sub check_fields
+{
+    my ($ds, $table, $field_array) = @_;
+
+    my $field_types = field_types($ds, $table);
+    foreach my $field (@{$field_array})
+    {
+        print "ERROR: Table \"$table\" is missing field \"$field\"\n" unless $field_types->{$field};
+    }
+}
+
+# Get the site's ID or url
+
+my ($site_ids, $start_time, $end_time, $format, $help);
+GetOptions("site:s"         => \$site_ids,
+           "help|?"         => \$help) or pod2usage(2);
+pod2usage(1) if $help or !$site_ids;
+
+my @site_ids = $site_ids =~ /^(all|local)$/ ?
+               all_site_ids($site_ids) :
+               split(',', $site_ids);
+foreach my $site_id (@site_ids)
+{
+    # Get the site
+
+    Data::Site->connect();
+    my $site = Data::Site->row($site_id);
+    Data::Site->disconnect();
+    print "Checking tables for site $site_id $site->{url}\n";
+
+    # Open a MySQL session for the site's stats database
+
+    my $site_id = $site->{site_id};
+    my $ds = $site->data_server();
+    my $database = $site->database();
+    eval
+    {
+        check_fields($ds, "$database.Page", \@page_fields);
+        check_fields($ds, "$database.User", \@user_fields);
+        check_fields($ds, "$database.Visit", \@visit_fields);
+        check_fields($ds, "$database.Event", \@event_fields);
+        check_fields($ds, "$database.Stats", \@stats_fields);
+        check_fields($ds, "$database.Traffic", \@traffic_fields);
+        check_fields($ds, "$database.TrafficStats", \@traffic_stats_fields);
+    };
+    print "ERROR: $@" if $@;
+}
+
+__END__
+
+=head1 DEPENDENCIES
+
+Getopt::Long, Pod::Usage, Data::Site, Server::DataServer
+
+=head1 AUTHOR
+
+Kevin Hutchinson (kevin.hutchinson@legendum.com)
+
+=head1 COPYRIGHT
+
+Copyright (c) 2015 Legendum Ltd (UK)
+
+This program is free software; you can redistribute it and/or
+modify it under the terms of the GNU General Public License
+as published by the Free Software Foundation; either version 3
+of the License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU General Public License for more details.

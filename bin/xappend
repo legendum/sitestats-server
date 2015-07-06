@@ -1,0 +1,62 @@
+#!/usr/bin/env perl
+
+=head1 NAME
+
+xappend - Append some info to each line in a file (or run a regex on them)
+
+=head1 SYNOPSIS
+
+Use this program to append info to lines in a file or run a regex on them.
+
+xappend 'some text'
+xappend '/from/to/'
+
+=head1 DESCRIPTION
+
+B<xappend> is useful when you need to add the same information to each line
+in a file, or run a simple search/replace on each line in a file.
+
+=cut
+
+use strict;
+
+my $text = shift;
+my ($blank, $from, $to, $i) = split '/', $text;
+
+while (<>)
+{
+    if ($from) # it's a regex
+    {
+        $i eq 'i' ? s/$from/$to/gi : s/$from/$to/g;
+        print $_;
+    }
+    else # it's a simple append
+    {
+        chomp;
+        print $_ . "$text\n";
+    }
+}
+
+__END__
+
+=head1 DEPENDENCIES
+
+None
+
+=head1 AUTHOR
+
+Kevin Hutchinson (kevin.hutchinson@legendum.com)
+
+=head1 COPYRIGHT
+
+Copyright (c) 2015 Legendum Ltd (UK)
+
+This program is free software; you can redistribute it and/or
+modify it under the terms of the GNU General Public License
+as published by the Free Software Foundation; either version 3
+of the License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU General Public License for more details.

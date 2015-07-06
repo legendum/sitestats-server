@@ -1,0 +1,117 @@
+#!/usr/bin/env perl
+
+=head1 NAME
+
+xamine - Examine data inside a stats database
+
+=head1 SYNOPSIS
+
+Use this program to examine data inside a stats database
+
+xamine -site=blah.com -server=server.net -start_date=YYYYMMDD -end_date=YYYYMMDD
+
+ Options:
+  -site           the site ID to examine
+  -server         the server to examine
+  -start_date     the start date for the examination
+  -end_date       the end date for the examination
+  -help or -?     display this help message
+
+=head1 DESCRIPTION
+
+B<xamine> examines data inside a stats database.
+
+=cut
+
+use strict;
+
+BEGIN {
+    $ENV{SERVER_HOME} ||= $ENV{HOME} . '/sitestats-server';
+    $ENV{CONFIG_DIR}="$ENV{SERVER_HOME}/config";
+}
+
+use lib "$ENV{SERVER_HOME}/perl/lib";
+use Utils::Env; Utils::Env->setup();
+use Getopt::Long;
+use Pod::Usage;
+use Data::Site;
+use Server::DataServer;
+use Utils::Time;
+
+# Get the server and optional start/end dates
+
+my ($site, $server, $start_date, $end_date, $help);
+GetOptions("site=s"         => \$site,
+           "server:s"       => \$server,
+           "start_date:i"   => \$start_date,
+           "end_date:i"     => \$end_date,
+           "help|?"         => \$help) or pod2usage(2);
+pod2usage(1) if $help or !$site;
+
+# Get the web site details
+
+Data::Site->connect();
+$site = Data::Site->select('site_id = ? or url like ?', $site, '%'.$site);
+Data::Site->disconnect();
+my $site_id = $site->{site_id} or pod2usage(1);
+
+# Get the start time and end time to examine
+
+my $time_zone   = $site->{time_zone};
+$start_date     ||= 0;
+$end_date       = $start_date unless length $end_date; # "0" has length 1 char
+$start_date     = Utils::Time->normalize_date($start_date);
+$end_date       = Utils::Time->normalize_date($end_date);
+my $start_time  = ( Utils::Time->get_time_range($start_date, $time_zone) )[0];
+my $end_time    = ( Utils::Time->get_time_range($end_date,   $time_zone) )[1];
+
+# Connect to the data server
+
+my $ds = $server ? Server::DataServer->new($server) : $site->data_server();
+$ds->connect();
+
+my $time;
+for ($time = $start_time; $time < $end_time; $time += 3600)
+{
+    my $date_time = Utils::Time->get_date_time($time, $time_zone);
+    $date_time =~ s/:00$//; # strip the seconds
+
+    my $query1 = $ds->sql("select count(*) as visits from stats$site_id.Visit where time between ? and ?", $time, $time + 3599);
+    my $row1 = $query1->fetchrow_hashref();
+    my $query2 = $ds->sql("select count(*) as events from stats$site_id.Event where time between ? and ?", $time, $time + 3599);
+    my $row2 = $query2->fetchrow_hashref();
+    print "$date_time\t($time)\t$row1->{visits}\t$row2->{events}\n";
+}
+
+# Show the time at end of day
+
+$time -= 1;
+my $date_time = Utils::Time->get_date_time($time, $time_zone);
+$date_time =~ s/:59$//; # strip the seconds
+print "$date_time\t($time)\tEnd of day\n";
+
+$ds->disconnect();
+
+__END__
+
+=head1 DEPENDENCIES
+
+Getopt::Long, Pod::Usage, Data::Site, Server::DataServer, Utils::Time
+
+=head1 AUTHOR
+
+Kevin Hutchinson (kevin.hutchinson@legendum.com)
+
+=head1 COPYRIGHT
+
+Copyright (c) 2015 Legendum Ltd (UK)
+
+This program is free software; you can redistribute it and/or
+modify it under the terms of the GNU General Public License
+as published by the Free Software Foundation; either version 3
+of the License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU General Public License for more details.

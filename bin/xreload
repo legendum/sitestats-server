@@ -1,0 +1,146 @@
+#!/usr/bin/env perl
+
+=head1 NAME
+
+xreload - Reload data from old Apache log files in custom xserver format
+
+=head1 SYNOPSIS
+
+Use this program to reload data from Apache log files for a measured site:
+
+xreload -start_time=NNNNNNNNNN [-end_time=NNNNNNNNNN] [-site=url/ID...]
+
+ Options:
+  -date           the date to reload
+  -start_time     the Unix epoch time to begin loading data
+  -end_time       the Unix epoch time to finish loading data (optional)
+  -site           the url or ID of the site being measured (optional)
+  -file           an optional filename if we're reloading a particular file
+  -help or -?     display this help message
+
+=head1 DESCRIPTION
+
+B<xreload> reloads data from old Apache log files in custom xserver format.
+
+=cut
+
+use strict;
+
+BEGIN {
+    $ENV{SERVER_HOME} ||= $ENV{HOME} . '/sitestats-server';
+    $ENV{CONFIG_DIR}="$ENV{SERVER_HOME}/config";
+}
+
+use lib "$ENV{SERVER_HOME}/perl/lib";
+use Utils::Env; Utils::Env->setup();
+use Utils::Time;
+use Getopt::Long;
+use Pod::Usage;
+use Data::Site;
+use Server::Extractor;
+
+my ($start_time, $end_time, @site_ids, $date, $file, $help);
+GetOptions("start_time=i" => \$start_time,
+           "end_time:i"   => \$end_time,
+           "site:s@"      => \@site_ids,
+           "date:s"       => \$date,
+           "file:s"       => \$file,
+           "help|?"       => \$help) or pod2usage(2);
+pod2usage(1) if $help or (!$start_time && !$date && !$file);
+
+my $extractor = Server::Extractor->new();
+$extractor->begin_files(); # to connect
+
+# Get time range for a date if provided
+
+($start_time, $end_time) = Utils::Time->get_time_range($date) if $date;
+
+# Set default times
+
+$start_time ||= 600;
+$end_time ||= time();
+
+# Get a list of data files
+
+opendir (APACHE, "$ENV{DATA_DIR}/apache");
+my @files = sort grep /^[^\.]/, readdir(APACHE);
+closedir APACHE;
+@files = ($file) if $file;
+
+# Create a grep pattern
+
+my $pattern = '';
+Data::Site->connect();
+foreach my $site_id (@site_ids)
+{
+    my $site = Data::Site->select('site_id = ? or url like ?', $site_id, '%'.$site_id);
+    $pattern .= '|' if $pattern;
+    $pattern .= "si=$site->{site_id}";
+}
+Data::Site->disconnect();
+$pattern = "^event:($pattern)" if $pattern;
+
+# Open a reload file
+
+my $reload = "/tmp/reload.$$";
+open (RELOAD, ">$reload");
+
+# Read the files in the Apache data directory
+
+my $lines = 0;
+FILES:
+foreach my $file (@files)
+{
+    my $time = 0; $time = $1 if $file =~ /\.(\d+)$/;
+    next if $time < $start_time - 600;
+
+    open (FILE, "$ENV{DATA_DIR}/apache/$file");
+    while (my $line = <FILE>)
+    {
+        next if $pattern && $line !~ /$pattern/;
+        my $time = 0; $time = $1 if $line =~ /tm=(\d+)/;
+        next if $time < $start_time;
+        last FILES if $time > $end_time;
+        $line =~ s/^event://;
+        $line = 'event:' . $extractor->parse($line) . "\n";
+        print RELOAD $line;
+        $lines++;
+    }
+    close FILE;
+}
+
+# Refresh the list of data files
+
+opendir (APACHE, "$ENV{DATA_DIR}/apache");
+@files = sort grep /^[^\.]/, readdir(APACHE);
+closedir APACHE;
+
+# Rename the reload file so it's loaded by the transformer
+
+close RELOAD;
+system "/bin/mv $reload $ENV{DATA_DIR}/extractor/reload.$$";
+print "Reloading $lines lins of data\n";
+
+__END__
+
+=head1 DEPENDENCIES
+
+Getopt::Long, Pod::Usage, Data::Site, Server::Extractor
+
+=head1 AUTHOR
+
+Kevin Hutchinson (kevin.hutchinson@legendum.com)
+
+=head1 COPYRIGHT
+
+Copyright (c) 2015 Legendum Ltd (UK)
+
+This program is free software; you can redistribute it and/or
+modify it under the terms of the GNU General Public License
+as published by the Free Software Foundation; either version 3
+of the License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU General Public License for more details.

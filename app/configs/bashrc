@@ -1,0 +1,3 @@
+export SERVER_HOME=$CLOUD_ROOT/projects/$project
+export PATH=$PATH:$SERVER_HOME/bin
+export ${PROJECT}_COMMAND="$SERVER_HOME/bin/xserver"

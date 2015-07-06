@@ -1,0 +1,154 @@
+#!/usr/bin/env perl
+
+=head1 NAME
+
+xserver - Start, stop and check status of SiteStats servers
+
+=head1 SYNOPSIS
+
+Use this program to start and stop the SiteStats event measurement system:
+
+xserver [options] [server ...]
+
+ Options:
+  -start          start the servers
+  -stop           stop the servers
+  -restart        restart the servers
+  -status         check the status of the servers
+  -help or -?     display this help message
+
+ Servers:
+   extractor.pl   extracts event infomration from custom Apache log files
+   transformer.pl transforms events into data loaded in MySQL data tables
+   gridengine.pl  load-balances data analysis jobs over many comp servers
+
+=head1 DESCRIPTION
+
+B<xserver> manages the various servers by starting, stopping, restarting
+and checking the status of the servers.
+
+=cut
+
+use strict;
+
+BEGIN {
+    $ENV{SERVER_HOME} ||= $ENV{HOME} . '/sitestats-server';
+    $ENV{CONFIG_DIR}="$ENV{SERVER_HOME}/config";
+}
+
+# Get command line options
+
+use Getopt::Long;
+use Pod::Usage;
+my ($restart, $start, $status, $stop, $help);
+GetOptions("restart"    => \$restart,
+           "start"      => \$start,
+           "status"     => \$status,
+           "stop"       => \$stop,
+           "help|?"     => \$help) or pod2usage(2);
+pod2usage(1) if $help || (!$restart && !$start && !$status && !$stop);
+
+# Setup all the environment variables
+
+use lib "$ENV{SERVER_HOME}/perl/lib";
+use Utils::Env; Utils::Env->setup();
+
+# Set the path to the command programs
+
+my $path = "$ENV{SERVER_HOME}/perl";
+
+# Get a list of all running perl processes
+
+open (PS, "ps -ef | grep -v $$|");
+my @ps = <PS>;
+close PS;
+
+# Get the server list
+
+my @servers = @ARGV ? (@ARGV) : qw(extractor.pl transformer.pl gridengine.pl);
+
+# Stop processes as necessary
+
+if ($stop || $restart)
+{
+    foreach my $server (@servers)
+    {
+        stop($server);
+    }
+    print "stopped\n";
+}
+
+# Pause for a second if we're restarting
+
+sleep 1 if $restart;
+
+# Check processes as necessary for server commands
+
+if ($start || $restart || $status)
+{
+    # Check whether our perl processes are running
+
+    my %running;
+    foreach my $server (@servers)
+    {
+        $running{$server} = grep /$server$/, @ps;
+    }
+
+    # Start processes as necessary
+
+    if ($start || $restart)
+    {
+        my ($mday, $month, $year) = (gmtime)[3, 4, 5];
+        $month++;
+        $year += 1900;
+        my $date = sprintf("%04d%02d%02d", $year, $month, $mday);
+
+        foreach my $server (@servers)
+        {
+            if (!$running{$server} || $restart)
+            {
+                system("$path/$server >> $ENV{LOGS_DIR}/xserver/$date.txt 2>&1 &");
+            }
+        }
+        print "started\n";
+    }
+    elsif ($status)
+    {
+        foreach my $server (@servers)
+        {
+            print "$server " . ($running{$server} ? "running\n" : "NOT RUNNING\n");
+        }
+    }
+}
+
+sub stop
+{
+    my $process_name = shift;
+    my @processes = grep /$process_name/, @ps;
+    foreach my $process (@processes)
+    {
+        kill 15, $1 if $process =~ /(\d+)/; # SIGTERM
+    }
+}
+
+=head1 DEPENDENCIES
+
+Getopt::Long, Pod::Usage, extractor.pl, activity.pl, splitter.pl, loader.pl
+
+=head1 AUTHOR
+
+Kevin Hutchinson (kevin.hutchinson@legendum.com)
+
+=head1 COPYRIGHT
+
+Copyright (c) 2015 Legendum Ltd (UK)
+
+This program is free software; you can redistribute it and/or
+modify it under the terms of the GNU General Public License
+as published by the Free Software Foundation; either version 3
+of the License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU General Public License for more details.

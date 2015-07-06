@@ -1,0 +1,98 @@
+#!/usr/bin/env perl
+
+=head1 NAME
+
+xcoding - Fix encodings in the data tables for a website
+
+=head1 SYNOPSIS
+
+Use this program to fix encodings in the data tables for a website
+
+xport -site=12345
+
+ Options:
+  -site           the url or ID of the site whose tables need fixing
+
+=head1 DESCRIPTION
+
+B<xcoding> fixes encodings in the data tables for a website
+
+=cut
+
+use strict;
+
+BEGIN {
+    $ENV{SERVER_HOME} ||= $ENV{HOME} . '/sitestats-server';
+    $ENV{CONFIG_DIR}="$ENV{SERVER_HOME}/config";
+}
+
+use lib "$ENV{SERVER_HOME}/perl/lib";
+use Utils::Env; Utils::Env->setup();
+use Getopt::Long;
+use Pod::Usage;
+use Encode;
+use Encode::Guess;
+use Data::Site;
+
+# Get the site's ID or url
+
+my ($site_id, $help);
+GetOptions("site=s"         => \$site_id,
+           "help|?"         => \$help) or pod2usage(2);
+pod2usage(1) if $help or !$site_id;
+
+# Get the site
+
+Data::Site->connect();
+my $site = Data::Site->select('site_id = ? or url like ?', $site_id, '%'.$site_id);
+Data::Site->disconnect();
+
+# Connect to the site's data server
+
+my $ds = $site->data_server();
+$ds->connect();
+
+$ds->disconnect();
+my $db = $site->database();
+my $q = $ds->sql("select visit_id, search from $db.Visit where search <> ''");
+my $row;
+while ($row = $q->fetchrow_hashref())
+{
+    my $visit_id = $row->{visit_id};
+    my $search = $row->{search};
+    my $decoder = guess_encoding($search, qw/latin1 euc-jp shiftjis 7bit-jis/);
+    my $decoded = $search;
+    if (ref($decoder))
+    {
+        eval { $decoded = $decoder->decode($search) };
+    }
+    elsif ($search !~ /^[ÅÄÖåäö\w\s.,_\-\@\$\%\&`'"\/\\]+$/) # Swedish charset
+    {
+        eval { $decoded = decode('latin1', $search) };
+    }
+    $ds->sql("update $db.Visit set search = ? where visit_id = ?", $decoded, $visit_id)
+}
+
+__END__
+
+=head1 DEPENDENCIES
+
+Getopt::Long, Pod::Usage, Encode, Encode::Guess, Data::Site
+
+=head1 AUTHOR
+
+Kevin Hutchinson (kevin.hutchinson@legendum.com)
+
+=head1 COPYRIGHT
+
+Copyright (c) 2015 Legendum Ltd (UK)
+
+This program is free software; you can redistribute it and/or
+modify it under the terms of the GNU General Public License
+as published by the Free Software Foundation; either version 3
+of the License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU General Public License for more details.

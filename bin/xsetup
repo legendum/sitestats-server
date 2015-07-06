@@ -1,0 +1,35 @@
+#!/bin/sh
+
+# Get the "sitestats-server" home directory
+
+DIR=$SERVER_HOME
+if [ -z "$DIR" ] ; then
+    DIR=$HOME/sitestats-server
+fi
+DATA_DIR=$DIR/data
+LOGS_DIR=$DIR/logs
+
+# Data directories
+
+mkdir $DATA_DIR
+mkdir $DATA_DIR/apache
+mkdir $DATA_DIR/extractor
+mkdir $DATA_DIR/reporter; chmod 777 $DATA_DIR/reporter
+mkdir $DATA_DIR/sitester; chmod 777 $DATA_DIR/sitester
+
+# Log directories
+
+mkdir $LOGS_DIR
+mkdir $LOGS_DIR/browser
+mkdir $LOGS_DIR/cron
+mkdir $LOGS_DIR/extractor
+mkdir $LOGS_DIR/gridengine
+mkdir $LOGS_DIR/reporter; chmod 777 $LOGS_DIR/reporter
+mkdir $LOGS_DIR/sitestats
+mkdir $LOGS_DIR/sitester; chmod 777 $LOGS_DIR/sitester
+mkdir $LOGS_DIR/transformer
+mkdir $LOGS_DIR/userdata
+mkdir $LOGS_DIR/worldstats
+mkdir $LOGS_DIR/xserver
+
+# End of xsetup

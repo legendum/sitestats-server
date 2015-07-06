@@ -1,0 +1,108 @@
+#!/usr/bin/env perl
+
+=head1 NAME
+
+xlocks - Look for table locks in the database for a particular site/host.
+
+=head1 SYNOPSIS
+
+Use this program to look for table locks in a particualr site's database
+or on a particular host's MySQL server. If no site or host is specified
+then the current host is assumed by default.
+
+xlocks [-site=S] [-host=S]
+
+ Options:
+  -site           the url or ID of the site being checked for locks, or
+  -host           the hostname or IP address of the server
+  -help or -?     display this help message
+
+=head1 DESCRIPTION
+
+B<xlocks> looks for table locks in a particualr site's database, or on
+a particular host. If no site or host is specified, the current host
+is assumed by default.
+
+=cut
+
+use strict;
+
+BEGIN {
+    $ENV{SERVER_HOME} ||= $ENV{HOME} . '/sitestats-server';
+    $ENV{CONFIG_DIR}="$ENV{SERVER_HOME}/config";
+}
+
+use lib "$ENV{SERVER_HOME}/perl/lib";
+use Utils::Env; Utils::Env->setup();
+use Getopt::Long;
+use Pod::Usage;
+use Data::Site;
+
+# Get the site's ID or url
+
+my ($site_id, $host, $help);
+GetOptions("site:s" => \$site_id,
+           "host:s" => \$host,
+           "help|?" => \$help) or pod2usage(2);
+pod2usage(1) if $help;
+
+# By default, look for all "stats" databases
+
+my $database = 'stats';
+
+if ($site_id)
+{
+    # Get the host and site ID from the site URL
+
+    if (!$host || $site_id !~ /^\d+$/)
+    {
+        Data::Site->connect();
+        my $site = Data::Site->select('site_id = ? or url like ?', $site_id, '%'.$site_id);
+        Data::Site->disconnect();
+        $site_id = $site->{site_id};
+        $host = $site->data_server()->{host};
+    }
+
+    $database .= $site_id;
+}
+
+# Look for database table locks
+
+$host ||= $ENV{HOSTNAME};
+my $dbh = Data::Site->connect(host => $host);
+my $query = $dbh->prepare("show open tables");
+$query->execute() or die "Error:" . $query->errstr . "\n";
+while (my $row = $query->fetchrow_arrayref())
+{
+    next unless $row->[0] =~ /$database/;
+    my $dbase = $row->[0];
+    my $table = $row->[1];
+    my $locks = $row->[2];
+    print "Table $dbase.$table has $locks locks\n" if $locks;
+}
+$query->finish();
+Data::Site->disconnect();
+
+__END__
+
+=head1 DEPENDENCIES
+
+Getopt::Long, Pod::Usage, Data::Site
+
+=head1 AUTHOR
+
+Kevin Hutchinson (kevin.hutchinson@legendum.com)
+
+=head1 COPYRIGHT
+
+Copyright (c) 2015 Legendum Ltd (UK)
+
+This program is free software; you can redistribute it and/or
+modify it under the terms of the GNU General Public License
+as published by the Free Software Foundation; either version 3
+of the License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU General Public License for more details.

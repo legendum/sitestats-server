@@ -1,0 +1,148 @@
+#!/usr/bin/env perl
+
+=head1 NAME
+
+xtract - Extract data from a stats database
+
+=head1 SYNOPSIS
+
+Use this program to extract data from a stats database
+
+xtract -site=S -start_time=1hour -end_time=0seconds
+
+ Options:
+  -site           the url or ID of the site being measured
+  -start_time     the start time (a 10 digit Unix epoch time)
+  -end_time       the end time (a 10 digit Unix epoch time)
+  -format         the format (default is CSV)
+  -help or -?     display this help message
+
+=head1 DESCRIPTION
+
+B<xtract> extracts data from a stats database.
+
+=cut
+
+use strict;
+
+BEGIN {
+    $ENV{SERVER_HOME} ||= $ENV{HOME} . '/sitestats-server';
+    $ENV{CONFIG_DIR}="$ENV{SERVER_HOME}/config";
+}
+
+use lib "$ENV{SERVER_HOME}/perl/lib";
+use Utils::Env; Utils::Env->setup();
+use Getopt::Long;
+use Pod::Usage;
+use Text::CSV::Encoded;
+use Encode;
+use Data::Site;
+use Server::DataServer;
+
+# Get the site's ID or url
+
+my ($site_id, $start_time, $end_time, $format, $help);
+GetOptions("site:s"         => \$site_id,
+           "start_time:s"   => \$start_time,
+           "end_time:s"     => \$end_time,
+           "format:s"       => \$format,
+           "help|?"         => \$help) or pod2usage(2);
+pod2usage(1) if $help or !$site_id;
+
+# A function to apply a relative time
+
+sub apply_relative_time
+{
+    my $time = shift;
+    return $time if $time >= 1_000_000_000;
+    $time *= 86400 if $time =~ s/\s?d(ay?)?$//i;
+    $time *= 3600 if $time =~ s/\s?h(ours?)?$//i;
+    $time *= 60 if $time =~ s/\s?m(in(ute)?s?)?$//i;
+    $time =~ s/\ssec(ond)?s?$//i;
+    return time() - $time;
+}
+
+# A function to print to a CSV file
+
+sub print_to_csv
+{
+    my ($file, $query) = @_;
+    my $csv = Text::CSV::Encoded->new( { encoding_out => 'iso-8859-1' } );
+
+    my @columns;
+    my $is_ok;
+    while (my $row = $query->fetchrow_hashref())
+    {
+        $row->{city} = decode('utf8', $row->{city}) if $row->{city};
+        $row->{name} = decode('utf8', $row->{name}) if $row->{name};
+        $row->{referrer} = decode('utf8', $row->{referrer}) if $row->{referrer};
+
+        if (!@columns) # the first line
+        {
+            @columns = sort keys %$row;
+            $is_ok = $csv->combine(@columns);
+            print STDERR $csv->error_diag() unless $is_ok;
+            print $file $csv->string() . "\r\n";
+        }
+
+        my @fields = map {$row->{$_}} @columns;
+        $is_ok = $csv->combine(@fields);
+        print STDERR $csv->error_diag() unless $is_ok;
+        print $file $csv->string() . "\r\n";
+    }
+}
+
+# Get the site
+
+Data::Site->connect();
+my $site = Data::Site->select('site_id = ? or url like ?', $site_id, '%'.$site_id);
+Data::Site->disconnect();
+
+# Open a MySQL session for the site's stats database
+
+my $site_id = $site->{site_id};
+my $database = "stats$site_id";
+my $data_server = $site->data_server();
+
+# Allow the start and end times to be relative to "right now"
+
+$start_time = apply_relative_time($start_time);
+$end_time = apply_relative_time($end_time);
+
+# Read from the event table
+
+my $database = $site->database();
+
+my $event_query = $data_server->sql("select * from $database.Event where time between ? and ?", $start_time, $end_time);
+open my $event_file, ">:encoding(utf8)", "$database.Event.$start_time.$end_time.csv"
+    or die "cannot open event file for writing";
+print_to_csv($event_file, $event_query);
+
+my $visit_query = $data_server->sql("select * from $database.Visit where time between ? and ?", $start_time, $end_time);
+open my $visit_file, ">:encoding(utf8)", "$database.Visit.$start_time.$end_time.csv"
+    or die "cannot open visit file for writing";
+print_to_csv($visit_file, $visit_query);
+
+__END__
+
+=head1 DEPENDENCIES
+
+Getopt::Long, Pod::Usage, Text::CSV::Encoded, Encode, Data::Site, Server::DataServer
+
+=head1 AUTHOR
+
+Kevin Hutchinson (kevin.hutchinson@legendum.com)
+
+=head1 COPYRIGHT
+
+Copyright (c) 2015 Legendum Ltd (UK)
+
+This program is free software; you can redistribute it and/or
+modify it under the terms of the GNU General Public License
+as published by the Free Software Foundation; either version 3
+of the License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU General Public License for more details.

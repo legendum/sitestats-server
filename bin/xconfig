@@ -1,0 +1,114 @@
+#!/usr/bin/env perl
+
+=head1 NAME
+
+xconfig - Get/set configuration settings for web sites being measured
+
+=head1 SYNOPSIS
+
+Use this program to get/set configuration settings for measured sites:
+
+xconfig -site=S [-channel=C] [-report=R] [-field=F] [-value=V]
+
+ Options:
+  -site           the url or ID of the site being measured
+  -channel        the site's content channel ID (optional)
+  -report         a report name or ID (optional)
+  -field          the field to get or set (optional)
+  -value          a new value for the field (optional)
+  -help or -?     display this help message
+
+=head1 DESCRIPTION
+
+B<xconfig> gets and sets configuration settings for measured sites.
+
+=cut
+
+use strict;
+
+BEGIN {
+    $ENV{SERVER_HOME} ||= $ENV{HOME} . '/sitestats-server';
+    $ENV{CONFIG_DIR}="$ENV{SERVER_HOME}/config";
+}
+
+use lib "$ENV{SERVER_HOME}/perl/lib";
+use Utils::Env; Utils::Env->setup();
+use Getopt::Long;
+use Pod::Usage;
+use Data::Site;
+use Data::SiteConfig;
+use Client::Sitester::Reports;
+
+my ($site_id, $channel_id, $report_id, $field, $value, $help);
+GetOptions("site=s"     => \$site_id,
+           "channel:i"  => \$channel_id,
+           "report:s"  => \$report_id,
+           "field:s"  => \$field,
+           "value:s"  => \$value,
+           "help|?"     => \$help) or pod2usage(2);
+pod2usage(1) if $help or !$site_id;
+
+# Set the channel and report, doing a report name lookup if necessary
+
+$channel_id ||= 0;
+$report_id ||= 0;
+$report_id = Client::Sitester::Reports->report_id($report_id) if $report_id =~ /\D+/;
+die "Bad report name" unless length $report_id;
+
+# Get the site from the URL
+
+if ($site_id !~ /^\d+$/)
+{
+    Data::Site->connect();
+    my $site = Data::Site->select("url = ?", $site_id);
+    Data::Site->disconnect();
+    $site->{site_id} or die "Site $site_id not found";
+    $site_id = $site->{site_id};
+}
+
+# Connect to the database
+
+Data::SiteConfig->connect();
+
+# Update the site configuration
+
+if ($site_id && $field)
+{
+    Data::SiteConfig->set($site_id, $channel_id, $report_id, $field, $value);
+}
+
+# Print the site configuration
+
+my $config = Data::SiteConfig->get($site_id)->[$channel_id][$report_id];
+while (my ($field, $value) = each(%{$config}))
+{
+    print "$field=$value\n";
+}
+
+# Disconnect from the database
+
+Data::SiteConfig->disconnect();
+
+__END__
+
+=head1 DEPENDENCIES
+
+Getopt::Long, Pod::Usage, Data::Site, Data::SiteConfig, Client::Sitester::Reports
+
+=head1 AUTHOR
+
+Kevin Hutchinson (kevin.hutchinson@legendum.com)
+
+=head1 COPYRIGHT
+
+Copyright (c) 2015 Legendum Ltd (UK)
+
+This program is free software; you can redistribute it and/or
+modify it under the terms of the GNU General Public License
+as published by the Free Software Foundation; either version 3
+of the License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU General Public License for more details.

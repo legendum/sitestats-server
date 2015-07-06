@@ -1,0 +1,297 @@
+#!/usr/bin/env perl
+
+=head1 NAME
+
+xclean - Clean data in a database by fixing wrong encodings
+
+=head1 SYNOPSIS
+
+Use this program to clean data in a database by fixing wrong encodings.
+
+xclean -site=S
+
+ Options:
+  -site           the url or ID of the site being measured
+  -table          the table or tables to clean (optional)
+  -help or -?     display this help message
+
+=head1 DESCRIPTION
+
+B<xclean> cleans data in a database by fixing wrong encodings,
+
+=cut
+
+use strict;
+
+BEGIN {
+    $ENV{SERVER_HOME} ||= $ENV{HOME} . '/sitestats-server';
+    $ENV{CONFIG_DIR}="$ENV{SERVER_HOME}/config";
+    $| = 1; # Flush to console
+}
+
+use lib "$ENV{SERVER_HOME}/perl/lib";
+use Utils::Env; Utils::Env->setup();
+use Getopt::Long;
+use Pod::Usage;
+use Constants::General;
+use Data::Site;
+use Server::DataServer;
+use Encode;
+use Encode::Guess;
+
+my ($site_id, $table, $help);
+GetOptions("site=s"     => \$site_id,
+           "table:s"    => \$table,
+           "help|?"     => \$help) or pod2usage(2);
+pod2usage(1) if $help or !$site_id;
+$table ||= 'page,stats,traffic,visit,event';
+
+# Connect to the database to get the site
+
+Data::Site->connect();
+my $site = Data::Site->select('site_id = ? or url like ?', $site_id, '%'.$site_id);
+Data::Site->disconnect();
+die "site $site_id not found" unless $site->{site_id};
+
+# Clean the data in the site's Page table
+
+sub clean_page_table
+{
+    my ($ds, $database) = @_;
+
+    print "\nCleaning table $database.Page\n\n";
+
+    my $query = $ds->sql("select page_id, url, title from $database.Page");
+    my $guess;
+    my @titles;
+    while (my $row = $query->fetchrow_hashref())
+    {
+        next unless $row->{title};
+        $guess = guess_encoding($row->{title});
+        push @titles, $row unless ref($guess);
+    }
+
+    # Clean page titles
+
+    foreach my $row (@titles)
+    {
+        print "Cleaning page title \"$row->{title}\" for page $row->{page_id} with URL $row->{url}\n";
+        $ds->sql("update $database.Page set title = ? where page_id = ?", encode(Constants::General::DEFAULT_ENCODING, $row->{title}), $row->{page_id});
+    }
+}
+
+# Clean the data in the site's Stats table
+
+sub clean_stats_table
+{
+    my ($ds, $database) = @_;
+
+    print "\nCleaning table $database.Stats\n\n";
+
+    my $query = $ds->sql("select the_date, channel_id, report_id, field from $database.Stats where report_id >= 10");
+    my $guess;
+    my @fields;
+    while (my $row = $query->fetchrow_hashref())
+    {
+        next unless $row->{field};
+        $guess = guess_encoding($row->{field});
+        push @fields, $row unless ref($guess);
+    }
+
+    # Clean stats fields
+
+    foreach my $row (@fields)
+    {
+        print "Cleaning stats field \"$row->{field}\" on date $row->{the_date} in channel $row->{channel_id} for report $row->{report_id}\n";
+        $ds->sql("update $database.Stats set field = ? where the_date = ? and channel_id = ? and report_id = ? and field = ?", encode(Constants::General::DEFAULT_ENCODING, $row->{field}), $row->{the_date}, $row->{channel_id}, $row->{report_id}, $row->{field});
+    }
+}
+
+# Clean the data in the site's Traffic table
+
+sub clean_traffic_table
+{
+    my ($ds, $database) = @_;
+    my $is_cleaning = 1;
+    my $from = 0;
+    my $step = 100_000;
+
+    print "\nCleaning table $database.Traffic\n\n";
+
+    while ($is_cleaning)
+    {
+        $is_cleaning = 0;
+        my $query = $ds->sql("select visit_id, sequence from $database.Traffic order by visit_id desc limit $from,$step");
+        my $guess;
+        my @sequence;
+        while (my $row = $query->fetchrow_hashref())
+        {
+            $is_cleaning = 1;
+
+            if ($row->{sequence})
+            {
+                $guess = guess_encoding($row->{sequence});
+                push @sequence, $row unless ref($guess);
+            }
+        }
+
+        # Clean traffic sequences
+
+        foreach my $row (@sequence)
+        {
+            print "Cleaning traffic sequence \"$row->{sequence}\" for visit $row->{visit_id}\n";
+            $ds->sql("update $database.Traffic set sequence = ? where visit_id = ?", encode(Constants::General::DEFAULT_ENCODING, $row->{sequence}), $row->{visit_id});
+        }
+
+        print '.';
+        $from += $step;
+    }
+}
+
+# Clean the data in the site's Visit table
+
+sub clean_visit_table
+{
+    my ($ds, $database) = @_;
+    my $is_cleaning = 1;
+    my $from = 0;
+    my $step = 100_000;
+
+    print "\nCleaning table $database.Visit\n\n";
+
+    while ($is_cleaning)
+    {
+        $is_cleaning = 0;
+        my $query = $ds->sql("select visit_id, referrer, search from $database.Visit order by visit_id desc limit $from,$step");
+        my $guess;
+        my @referrer;
+        my @search;
+        while (my $row = $query->fetchrow_hashref())
+        {
+            $is_cleaning = 1;
+
+            if ($row->{referrer})
+            {
+                $guess = guess_encoding($row->{referrer});
+                push @referrer, $row unless ref($guess);
+            }
+
+            if ($row->{search})
+            {
+                $guess = guess_encoding($row->{search});
+                push @search, $row unless ref($guess);
+            }
+        }
+
+        # Clean visit referrers
+
+        foreach my $row (@referrer)
+        {
+            print "Cleaning visit referrer \"$row->{referrer}\" for visit $row->{visit_id}\n";
+            $ds->sql("update $database.Visit set referrer = ? where visit_id = ?", encode(Constants::General::DEFAULT_ENCODING, $row->{referrer}), $row->{visit_id});
+        }
+
+        # Clean visit searches
+
+        foreach my $row (@search)
+        {
+            print "Cleaning visit search \"$row->{search}\" for visit $row->{visit_id}\n";
+            $ds->sql("update $database.Visit set search = ? where visit_id = ?", encode(Constants::General::DEFAULT_ENCODING, $row->{search}), $row->{visit_id});
+        }
+
+        print '.';
+        $from += $step;
+    }
+}
+
+# Clean the data in the site's Event table
+
+sub clean_event_table
+{
+    my ($ds, $database) = @_;
+    my $is_cleaning = 1;
+    my $from = 0;
+    my $step = 100_000;
+
+    print "\nCleaning table $database.Event\n\n";
+
+    while ($is_cleaning)
+    {
+        $is_cleaning = 0;
+        my $query = $ds->sql("select visit_id, time, name, description from $database.Event order by time desc limit $from,$step");
+        my $guess;
+        my @names;
+        my @descs;
+        while (my $row = $query->fetchrow_hashref())
+        {
+            $is_cleaning = 1;
+
+            if ($row->{name})
+            {
+                $guess = guess_encoding($row->{name});
+                push @names, $row unless ref($guess);
+            }
+
+            if ($row->{description})
+            {
+                $guess = guess_encoding($row->{description});
+                push @descs, $row unless ref($guess);
+            }
+        }
+
+        # Clean event names
+
+        foreach my $row (@names)
+        {
+            print "Cleaning event name \"$row->{name}\" for visit $row->{visit_id} at time $row->{time}\n";
+            $ds->sql("update $database.Event set name = ? where visit_id = ? and time = ?", encode(Constants::General::DEFAULT_ENCODING, $row->{name}), $row->{visit_id}, $row->{time});
+        }
+
+        # Clean event descriptions
+
+        foreach my $row (@descs)
+        {
+            print "Cleaning event description \"$row->{description}\" for visit $row->{visit_id} at time $row->{time}\n";
+            $ds->sql("update $database.Event set description = ? where visit_id = ? and time = ?", encode(Constants::General::DEFAULT_ENCODING, $row->{description}), $row->{visit_id}, $row->{time});
+        }
+
+        print '.';
+        $from += $step;
+    }
+}
+
+my $database = $site->database();
+my $ds = $site->data_server();
+$ds->connect();
+
+clean_page_table($ds, $database) if $table =~ /page/i;
+clean_stats_table($ds, $database) if $table =~ /stats/i;
+clean_traffic_table($ds, $database) if $table =~ /traffic/i;
+clean_visit_table($ds, $database) if $table =~ /visit/i;
+clean_event_table($ds, $database) if $table =~ /event/i;
+
+$ds->disconnect();
+
+__END__
+
+=head1 DEPENDENCIES
+
+Getopt::Long, Pod::Usage, Constants::General, Data::Site, Server::DataServer, Encode, Encode::Guess
+
+=head1 AUTHOR
+
+Kevin Hutchinson (kevin.hutchinson@legendum.com)
+
+=head1 COPYRIGHT
+
+Copyright (c) 2015 Legendum Ltd (UK)
+
+This program is free software; you can redistribute it and/or
+modify it under the terms of the GNU General Public License
+as published by the Free Software Foundation; either version 3
+of the License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU General Public License for more details.

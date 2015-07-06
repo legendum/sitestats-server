@@ -1,0 +1,79 @@
+#!/usr/bin/env perl
+
+=head1 NAME
+
+xstats - Open a MySQL session to the "stats" database for a site
+
+=head1 SYNOPSIS
+
+Use this program to open a MySQL session for a measured web site:
+
+xstats -site=S
+
+ Options:
+  -site           the url or ID of the site being measured
+  -help or -?     display this help message
+
+=head1 DESCRIPTION
+
+B<xstats> opens a MySQL session for a measured web site.
+
+=cut
+
+use strict;
+
+BEGIN {
+    $ENV{SERVER_HOME} ||= $ENV{HOME} . '/sitestats-server';
+    $ENV{CONFIG_DIR}="$ENV{SERVER_HOME}/config";
+}
+
+use lib "$ENV{SERVER_HOME}/perl/lib";
+use Utils::Env; Utils::Env->setup();
+use Getopt::Long;
+use Pod::Usage;
+use Data::Site;
+
+# Get the site's ID or url
+
+my ($site_id, $help);
+GetOptions("site:s"     => \$site_id,
+           "help|?"     => \$help) or pod2usage(2);
+pod2usage(1) if $help or !$site_id;
+
+# Get the site
+
+Data::Site->connect();
+my $site = Data::Site->select('site_id = ? or url like ?', $site_id, '%'.$site_id);
+Data::Site->disconnect();
+
+# Open a MySQL session for the site's stats database
+
+my $site_id = $site->{site_id};
+my $database = "stats$site_id";
+my $host = $site->data_server()->{host};
+print "$site->{url} database $database on data server $host\n\n";
+exec("mysql -A -u$ENV{DB_USER} -p$ENV{DB_PASSWORD} -h$host $database");
+
+__END__
+
+=head1 DEPENDENCIES
+
+Getopt::Long, Pod::Usage, Data::Site
+
+=head1 AUTHOR
+
+Kevin Hutchinson (kevin.hutchinson@legendum.com)
+
+=head1 COPYRIGHT
+
+Copyright (c) 2015 Legendum Ltd (UK)
+
+This program is free software; you can redistribute it and/or
+modify it under the terms of the GNU General Public License
+as published by the Free Software Foundation; either version 3
+of the License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU General Public License for more details.

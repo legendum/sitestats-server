@@ -1,0 +1,132 @@
+#!/usr/bin/env perl
+
+=head1 NAME
+
+xmigrate - Migrate stats databases from one server to another
+
+=head1 SYNOPSIS
+
+Use this program to migrate "stats" databases:
+
+xmigrate -from=this.server.net -to=that.server.net
+
+ Options:
+  -from           the data server hosting the databases
+  -to             the data server receiving the databases
+  -help or -?     display this help message
+
+...then type a list of site ID numbers, one per line, and finish
+with the simple line "." or "exit".
+
+=head1 DESCRIPTION
+
+B<xmigrate> migrates stats databases from one server to another.
+
+=cut
+
+use strict;
+
+BEGIN {
+    $ENV{SERVER_HOME} ||= $ENV{HOME} . '/sitestats-server';
+    $ENV{CONFIG_DIR}="$ENV{SERVER_HOME}/config";
+}
+
+use lib "$ENV{SERVER_HOME}/perl/lib";
+use Utils::Env; Utils::Env->setup();
+use Getopt::Long;
+use Pod::Usage;
+use Data::Site;
+use Server::DataServer;
+
+# Get the where clause SQL
+
+my ($from, $to, $help);
+GetOptions("from:s"     => \$from,
+           "to:s"       => \$to,
+           "help|?"     => \$help) or pod2usage(2);
+pod2usage(1) if $help || !$from || !$to;
+
+Data::Site->connect();
+
+my $username = $ENV{DB_USER} or die "no username";
+my $password = $ENV{DB_PASSWORD} or die "no password";
+my $orig_server = $from;
+my $dest_server = $to;
+
+while (<>)
+{
+    chomp;
+    my $site_id = $_;
+    last if $site_id eq '.' or $site_id eq 'exit';
+
+    my $site = Data::Site->row($site_id);
+    my $servers = $site->{data_server};
+    if ($servers !~ /$orig_server/)
+    {
+        print $site->{site_id} ? 
+              "WARNING: Site $site_id $site->{url} is not on $orig_server\n" :
+              "WARNING: Site $site_id not found\n";
+        next;
+    }
+
+    if ($site->{status} eq 'S')
+    {
+        print "Site $site_id $site->{url} is suspended\n";
+        next;
+    }
+
+    my $database = "stats$site_id";
+    print "Migrating site $site_id $site->{url} from $servers\n";
+
+    # 1) Dump the data
+
+    print "1) Dumping data from $database on $orig_server\n";
+    my $dumpfile = "/tmp/xmigrate.$database.gzip";
+    system "mysqldump --lock-tables --force -u$username -p$password -h$orig_server $database | gzip > $dumpfile";
+
+    # 2) Create a new database
+
+    print "2) Creating database $database on $dest_server\n";
+    my $ds = Server::DataServer->new($dest_server);
+    eval { $ds->sql("create database $database"); };
+    print "ERROR: $@\n" if $@;
+
+    # 3) Load the data
+
+    print "3) Loading data into $database on $dest_server\n";
+    system "zcat $dumpfile | mysql -u$username -p$password -h$dest_server $database";
+    unlink $dumpfile;
+
+    # 4) Update the master database "Site" table
+
+    $servers =~ s/$orig_server/$dest_server/;
+    $site->{data_server} = $servers;
+    $site->update();
+    print "4) Updated site $site_id to use data server(s) $servers\n";
+}
+
+Data::Site->disconnect();
+
+__END__
+
+=head1 DEPENDENCIES
+
+Getopt::Long, Pod::Usage, Data::Site, Server::DataServer
+
+=head1 AUTHOR
+
+Kevin Hutchinson (kevin.hutchinson@legendum.com)
+
+=head1 COPYRIGHT
+
+Copyright (c) 2015 Legendum Ltd (UK)
+
+This program is free software; you can redistribute it and/or
+modify it under the terms of the GNU General Public License
+as published by the Free Software Foundation; either version 3
+of the License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU General Public License for more details.

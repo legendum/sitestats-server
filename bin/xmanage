@@ -1,0 +1,209 @@
+#!/usr/bin/env perl
+
+=head1 NAME
+
+xmanage - Manage the xserver master data tables
+
+=head1 SYNOPSIS
+
+Use this progrma to install the database and add sites and user accounts
+
+xmanage [options...]
+
+ Options:
+  -install        install the master database and administrator details
+  -newsite        add a new web site and user account to the database
+  -getcode=ID     get HTML code to add to a web site to measure traffic
+  -help or -?     display this help message
+
+=head1 DESCRIPTION
+
+B<xmanage> manages the xserver master data tables.
+
+=cut
+
+use strict;
+
+BEGIN {
+    $ENV{SERVER_HOME} ||= $ENV{HOME} . '/sitestats-server';
+    $ENV{CONFIG_DIR}="$ENV{SERVER_HOME}/config";
+}
+
+# Get command line options
+
+use Getopt::Long;
+use Pod::Usage;
+my ($install, $newsite, $getcode, $help);
+GetOptions("install"    => \$install,
+           "newsite"    => \$newsite,
+           "getcode=i"  => \$getcode,
+           "help|?"     => \$help) or pod2usage(2);
+pod2usage(1) if $help || (!$install && !$newsite && !$getcode);
+
+# Use data modules
+
+use lib "$ENV{SERVER_HOME}/perl/lib";
+use Utils::Env; Utils::Env->setup();
+use Constants::General;
+use Data::Site;
+use Data::SiteAccount;
+use Data::Account;
+use Utils::Time;
+
+# Prompt the user for some input
+
+sub prompt
+{
+    my $request = shift;
+    print "$request: ";
+    my $response = <>;
+    chomp $response;
+    return $response;
+}
+
+# Install the database
+
+my $site;
+if ($install)
+{
+    # Create any missing tables
+
+    system("mysql -u$ENV{DB_USER} -p$ENV{DB_PASSWORD} -h$ENV{MASTER_SERVER} site <$ENV{SERVER_HOME}/mysql/site.sql");
+    
+    # Add a first site called "The World"
+
+    Data::Site->connect();
+    $site = Data::Site->row(1);
+    if (!$site->{site_id})
+    {
+        $site->{url} = 'The World';
+        $site->{data_server} = $site->{comp_server} = $ENV{MASTER_SERVER};
+        $site->{time_zone} = 0;
+        $site->{start_date} = Utils::Time->get_date();
+        $site->{product_code} = Constants::General::PRODUCT_CODE_COMMERCE;
+        $site->{status} = Constants::General::STATUS_LIVE;
+        $site->insert();
+    }
+    Data::Site->disconnect();
+    
+    # Add a first user
+
+    Data::Account->connect();
+    my $account = Data::Account->row(1);
+    if (!$account->{account_id})
+    {
+        $account->{realname} = prompt('Your name');
+        $account->{email} = prompt('Your email address');
+        $account->{username} = prompt('Choose a username');
+        $account->{password} = prompt('Choose a password');
+        $account->{start_date} = Utils::Time->get_date();
+        $account->{status} = Constants::General::STATUS_LIVE;
+        $account->insert();
+    }
+    Data::Account->disconnect();
+
+    # Connect the first user to The World
+
+    Data::SiteAccount->connect();
+    my $site_account = Data::SiteAccount->select("site_id=1 and account_id=1");
+    if (!$site_account->{site_account_id})
+    {
+        $site_account->{site_id} = 1;
+        $site_account->{channel_id} = 0; # whole site
+        $site_account->{account_id} = 1;
+        $site_account->{can_read} = $site_account->{can_write} = 'yes';
+        $site_account->{get_reports} = '1, 0';
+        $site_account->{get_periods} = 'week, month';
+        $site_account->{status} = Constants::General::STATUS_LIVE;
+        $site_account->insert();
+    }
+    Data::SiteAccount->disconnect();
+}
+elsif ($newsite)
+{
+    # Add a new web site
+
+    Data::Site->connect();
+    $site = Data::Site->new();
+    $site->{url} = prompt('Web site URL to add');
+    $site->{data_server} = $site->{comp_server} = $ENV{MASTER_SERVER};
+    $site->{time_zone} = 0;
+    $site->{start_date} = Utils::Time->get_date();
+    $site->{product_code} = Constants::General::PRODUCT_CODE_COMMERCE;
+    $site->{status} = Constants::General::STATUS_LIVE;
+    $site->insert();
+    Data::Site->disconnect();
+    
+    # Add a new user account
+
+    Data::Account->connect();
+    my $account = Data::Account->new();
+    $account->{realname} = prompt('New user\'s actual name');
+    $account->{email} = prompt('New user\'s email address');
+    $account->{username} = prompt('New user\'s username');
+    $account->{password} = prompt('New user\'s password');
+    $account->{start_date} = Utils::Time->get_date();
+    $account->{status} = Constants::General::STATUS_LIVE;
+    $account->insert();
+    Data::Account->disconnect();
+
+    # Connect the new web site to the new user account
+
+    Data::SiteAccount->connect();
+    my $site_account = Data::SiteAccount->new();
+    $site_account->{site_id} = $site->{site_id};
+    $site_account->{channel_id} = 0; # whole site
+    $site_account->{account_id} = $account->{account_id};
+    $site_account->{can_read} = $site_account->{can_write} = 'yes';
+    $site_account->{get_reports} = '1, 0';
+    $site_account->{get_periods} = 'week, month';
+    $site_account->{status} = Constants::General::STATUS_LIVE;
+    $site_account->insert();
+    Data::SiteAccount->disconnect();
+}
+
+# Display the HTML code to add to the web site to measure traffic
+
+if ($newsite || $getcode)
+{
+    if ($getcode)
+    {
+        Data::Site->connect();
+        $site = Data::Site->row($getcode);
+        Data::Site->disconnect();
+    }
+
+    print <<End_Of_Advice;
+
+Be sure to add the following HTML code to your web pages, just before the
+</body> tag at the bottom of each web page at $site->{url}:
+
+<!-- Start of code -->
+<sctipt type="text/javascript"
+src="$ENV{WEB_ROOT_SERVER}/sensor.php?$site->{site_id}"></script>
+<!-- End of code -->
+
+End_Of_Advice
+}
+
+=head1 DEPENDENCIES
+
+Constants::General, Data::Site, Data::SiteAccount, Data::Account, Utils::Time
+
+=head1 AUTHOR
+
+Kevin Hutchinson (kevin.hutchinson@legendum.com)
+
+=head1 COPYRIGHT
+
+Copyright (c) 2015 Legendum Ltd (UK)
+
+This program is free software; you can redistribute it and/or
+modify it under the terms of the GNU General Public License
+as published by the Free Software Foundation; either version 3
+of the License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU General Public License for more details.

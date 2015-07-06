@@ -1,0 +1,101 @@
+#!/usr/bin/env perl
+
+=head1 NAME
+
+xgrid - Submit a grid job to the xserver system, and then get a result
+
+=head1 SYNOPSIS
+
+Use this program to submit jobs to the xserver system, and get results
+
+xgrid -submit="some command" [-priority=N] [-server=domain]
+
+xgrid -result=JobID
+
+ Options:
+  -submit         the command to run (must start with an executable path)
+  -result         get the result after running a job with an id number
+  -priority       the priority of the job - defaults to 100 (optional)
+  -server         the preferred server to run the job on (optional)
+  -help or -?     display this help message
+
+=head1 DESCRIPTION
+
+B<xgrid> displays a Unix epoch time range for a particular date.
+The Unix epoch time is the number of seconds since 1/1/1970, UTC.
+
+=cut
+
+use strict;
+
+BEGIN {
+    $ENV{SERVER_HOME} ||= $ENV{HOME} . '/sitestats-server';
+    $ENV{CONFIG_DIR}="$ENV{SERVER_HOME}/config";
+}
+
+use lib "$ENV{SERVER_HOME}/perl/lib";
+use Utils::Env; Utils::Env->setup();
+use Getopt::Long;
+use Pod::Usage;
+use Data::GridJob;
+use Constants::General;
+
+my ($submit, $result, $priority, $server, $help);
+GetOptions("submit:s"   => \$submit,
+           "result:s"   => \$result,
+           "priority:i" => \$priority,
+           "server:s"   => \$server,
+           "help|?"     => \$help) or pod2usage(2);
+pod2usage(1) if $help || (!$submit && !$result);
+
+if ($submit)
+{
+    # Submit the job to the grid
+
+    my $grid_job = Data::GridJob->submit(
+        priority    => $priority,
+        command     => $submit,
+        comp_server => $server,
+    );
+
+    # Show the grid job's number
+
+    print "$grid_job->{grid_job_id}\n";
+}
+elsif ($result)
+{
+    # Get the job from the grid
+
+    Data::GridJob->connect();
+    my $grid_job = Data::GridJob->row($result);
+    Data::GridJob->disconnect();
+
+    # Show the grid job's result
+
+    my $result = $grid_job->{result} || '';
+    print "$result\n";
+}
+
+__END__
+
+=head1 DEPENDENCIES
+
+Getopt:Long, Pod::Usage, Data::GridJob, Constants::General
+
+=head1 AUTHOR
+
+Kevin Hutchinson (kevin.hutchinson@legendum.com)
+
+=head1 COPYRIGHT
+
+Copyright (c) 2015 Legendum Ltd (UK)
+
+This program is free software; you can redistribute it and/or
+modify it under the terms of the GNU General Public License
+as published by the Free Software Foundation; either version 3
+of the License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU General Public License for more details.

@@ -1,0 +1,6 @@
+* * * * * $SERVER_HOME/perl/cron.pl
+0 * * * * $SERVER_HOME/perl/browser.pl
+0 * * * * $SERVER_HOME/perl/reporter.pl 1
+0 * * * * $SERVER_HOME/perl/reporter.pl 0 hour
+0 * * * 1 $SERVER_HOME/perl/sitestats.pl week
+0 * 1 * * $SERVER_HOME/perl/sitestats.pl month

@@ -1,0 +1,73 @@
+#!/usr/bin/env perl
+
+=head1 NAME
+
+xgeo - Provide geographical information about an IP address
+
+=head1 SYNOPSIS
+
+Use this program to get geographical info about an IP address
+
+xgeo -ip=123.123.123.123
+
+ Options:
+  -ip             the IP address to look-up
+  -help or -?     display this help message
+
+=head1 DESCRIPTION
+
+B<xgeo> provides geographical information about an IP address
+
+=cut
+
+use strict;
+
+BEGIN {
+    $ENV{SERVER_HOME} ||= $ENV{HOME} . '/sitestats-server';
+    $ENV{CONFIG_DIR}="$ENV{SERVER_HOME}/config";
+}
+
+use lib "$ENV{SERVER_HOME}/perl/lib";
+use Utils::Env; Utils::Env->setup();
+use Getopt::Long;
+use Pod::Usage;
+use Utils::GeoIP;
+
+# Get the site's ID or url
+
+my ($ip, $help);
+GetOptions("ip:s"       => \$ip,
+           "help|?"     => \$help) or pod2usage(2);
+pod2usage(1) if $help or !$ip;
+
+# Lookup the IP address
+
+my $lookup = new Utils::GeoIP()->lookup($ip);
+while (my ($field, $value) = each %{$lookup})
+{
+    print "$field: $value\n";
+}
+
+__END__
+
+=head1 DEPENDENCIES
+
+Getopt::Long, Pod::Usage, Utils::GeoIP
+
+=head1 AUTHOR
+
+Kevin Hutchinson (kevin.hutchinson@legendum.com)
+
+=head1 COPYRIGHT
+
+Copyright (c) 2015 Legendum Ltd (UK)
+
+This program is free software; you can redistribute it and/or
+modify it under the terms of the GNU General Public License
+as published by the Free Software Foundation; either version 3
+of the License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU General Public License for more details.
