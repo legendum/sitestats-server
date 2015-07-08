@@ -48,8 +48,10 @@ if (!@site_ids)
     }
     Data::Site->disconnect();
 }
-elsif ($site_ids[0] eq 'hour') # sites with report_time > time()
+elsif ($site_ids[0] =~ /^(all|hour)$/) # all, or sites with report_time > time()
 {
+    my $scope = $site_ids[0];
+
     # Get all sites with future report times
 
     @site_ids = ();
@@ -58,6 +60,7 @@ elsif ($site_ids[0] eq 'hour') # sites with report_time > time()
 
     Data::Site->connect();
     my $query = "report_time > ? and (comp_server like '$ENV{HOSTNAME}%' or comp_server like '$host_ip%') and status <> 'S'";
+    $query =~ s/report_time/9999999999/ if $scope eq 'all';
     for (my $site = Data::Site->select($query, time);
             $site->{site_id};
             $site = Data::Site->next($query))
