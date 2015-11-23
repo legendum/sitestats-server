@@ -27,6 +27,7 @@ $VERSION = "1.0";
 use strict;
 use Utils::Config;
 use Sys::Hostname;
+use IO::Socket;
 {
     # Class static properties
 
@@ -57,9 +58,10 @@ sub setup
         $ENV{$var} ||= $value; # et voila!
     }
 
-    # Set the hostname (just in case!)
+    # Set the hostname and IP
 
     $ENV{HOSTNAME} = hostname();
+    $ENV{HOST_IP} = inet_ntoa(inet_aton($ENV{HOSTNAME}));
 
     # Get the default database settings
 

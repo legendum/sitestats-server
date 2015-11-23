@@ -27,7 +27,6 @@ $VERSION = "1.1";
 use strict;
 use Data::GridJob;
 use Utils::LogFile;
-use IO::Socket;
 {
     # Class static properties
 
@@ -36,10 +35,6 @@ use IO::Socket;
     use constant JOBS_TO_START => 3;    # how many jobs to initiate at a time
     use constant WAIT_FOR_COMP => 60;   # wait for comp server to run the job
     use constant PRIORITY_BIAS => 100;  # multiples of the priority in seconds
-
-    # Get the local IP address
-
-    $ENV{HOST_IP} = inet_ntoa(inet_aton($ENV{HOSTNAME}));
 
 =head2 Class Methods
 
