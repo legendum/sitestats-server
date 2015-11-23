@@ -188,7 +188,7 @@ sub disconnect
     {
         foreach my $uid (keys %{$_Cache})
         {
-            $_Cache->{$uid}->disconnect();
+            $_Cache->{$uid}->disconnect() if $_Cache->{$uid};
             delete $_Cache->{$uid};
         }
     }
