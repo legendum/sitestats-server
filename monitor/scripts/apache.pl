@@ -26,9 +26,10 @@ sub port
     my $config_file = '/etc/apache2/ports.conf';
     return 80 unless -f $config_file;
     open (CFG, $config_file);
-    my $line = <CFG>;
+    while (my $line = <CFG>) {
+        return $3 if $line =~ /(Listen|NameVirtualHost) ([\w\.]+:)?(\d+)$/;
+    }
     close CFG;
-    return $3 if $line =~ /(Listen|NameVirtualHost) ([\w\.]+:)?(\d+)$/;
     return 80;
 }
 
@@ -56,7 +57,7 @@ elsif ($secs >= TOO_SLOW)
 # Is the web server running too many processes?
 
 open (PS, "ps -e|");
-my $processes = grep /httpd/, <PS>;
+my $processes = grep /apache2/, <PS>;
 close PS;
 if ($processes > TOO_MANY)
 {
