@@ -15,7 +15,7 @@ use strict;
 use warnings;
 
 use constant TOO_SLOW => 10; # seconds
-use constant TOO_MANY => (`grep MaxClients /etc/apache2/apache.conf` =~ /(\d+)/ ? $1 - 20 : 200); # processes
+use constant TOO_MANY => (`grep MaxClients /etc/apache2/apache2.conf` =~ /(\d+)/ ? $1 - 20 : 200); # processes
 
 use Sys::Hostname;
 
