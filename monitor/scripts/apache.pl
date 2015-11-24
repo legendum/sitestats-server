@@ -43,7 +43,7 @@ my $return_code = 0;
 my @page = <GET>;
 close GET;
 my $secs = time() - $then;
-if (!grep /body/, @page)
+if (!grep /<\w+>/, @page) # match an HTML tag
 {
 	print STDERR "Web server is not running\n";
 	$return_code = 1
