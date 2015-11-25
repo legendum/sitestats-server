@@ -14,7 +14,7 @@ create table if not exists Stats
     KEY         Stats_the_date (the_date),
     KEY         Stats_channel_id (channel_id),
     KEY         Stats_report_id (report_id)
-) MAX_ROWS = 4294967296;
+) ENGINE="MyISAM", MAX_ROWS = 4294967296;
 
 create table if not exists Reports
 (
@@ -41,7 +41,7 @@ create table if not exists Reports
     KEY         Reports_the_date (the_date),
     KEY         Reports_channel_id (channel_id),
     KEY         Reports_report_id (report_id)
-) MAX_ROWS = 4294967296;
+) ENGINE="MyISAM", MAX_ROWS = 4294967296;
 
 create table if not exists User
 (
@@ -53,7 +53,7 @@ create table if not exists User
 
     KEY         User_user_id (user_id),
     KEY         User_visit_id (visit_id)
-) MAX_ROWS = 4294967296;
+) ENGINE="MyISAM", MAX_ROWS = 4294967296;
 
 create table if not exists Visit
 (
@@ -88,7 +88,7 @@ create table if not exists Visit
     KEY         Visit_user_id (user_id),
     KEY         Visit_time (time),
     KEY         Visit_duration (duration)
-) MAX_ROWS = 4294967296;
+) ENGINE="MyISAM", MAX_ROWS = 4294967296;
 
 create table if not exists Event
 (
@@ -108,7 +108,7 @@ create table if not exists Event
     KEY         Event_visit_id (visit_id),
     KEY         Event_user_id (user_id),
     KEY         Event_time (time)
-) MAX_ROWS = 4294967296;
+) ENGINE="MyISAM", MAX_ROWS = 4294967296;
 
 create table if not exists VisitTemp
 (
@@ -143,7 +143,7 @@ create table if not exists VisitTemp
     KEY         Visit_user_id (user_id),
     KEY         Visit_time (time),
     KEY         Visit_duration (duration)
-) MAX_ROWS = 4294967296;
+) ENGINE="MyISAM", MAX_ROWS = 4294967296;
 
 create table if not exists EventTemp
 (
@@ -162,7 +162,7 @@ create table if not exists EventTemp
     KEY         Event_visit_id (visit_id),
     KEY         Event_user_id (user_id),
     KEY         Event_time (time)
-) MAX_ROWS = 4294967296;
+) ENGINE="MyISAM", MAX_ROWS = 4294967296;
 
 create table if not exists Traffic
 (
@@ -179,7 +179,7 @@ create table if not exists Traffic
 
     KEY         Traffic_user_id (user_id),
     KEY         Traffic_time (time)
-) MAX_ROWS = 4294967296;
+) ENGINE="MyISAM", MAX_ROWS = 4294967296;
 
 create table if not exists TrafficStats
 (
@@ -210,7 +210,7 @@ create table if not exists TrafficStats
     KEY         TrafficStats_time (time),
     KEY         TrafficStats_channel_id (channel_id),
     KEY         TrafficStats_event0 (event0)
-) MAX_ROWS = 4294967296;
+) ENGINE="MyISAM", MAX_ROWS = 4294967296;
 
 create table if not exists AdClick
 (
@@ -227,7 +227,7 @@ create table if not exists AdClick
     keyword     VARCHAR(255) NOT NULL,
 
     KEY         AdClick_the_date (the_date, provider)
-) MAX_ROWS = 4294967296;
+) ENGINE="MyISAM", MAX_ROWS = 4294967296;
 
 create table if not exists Page
 (
@@ -244,7 +244,7 @@ create table if not exists Page
 
     KEY         Page_url (url(32)),
     KEY         Page_last_seen (last_seen)
-) MAX_ROWS = 4294967296;
+) ENGINE="MyISAM", MAX_ROWS = 4294967296;
 
 /**************************************************************
 Copyright (c) 2015 Legendum Ltd (UK)
