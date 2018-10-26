@@ -43,8 +43,8 @@ my @site_ids = $sites ? split(',', $sites) : map {$_->{site_id}} @sites;
 foreach my $site_id (@site_ids)
 {
     eval {
-        my $visit_file = "/tmp/stats$site_id.Visit.$$";
-        my $event_file = "/tmp/stats$site_id.Event.$$";
+        my $visit_file = "/var/lib/mysql-files/stats$site_id.Visit.$$";
+        my $event_file = "/var/lib/mysql-files/stats$site_id.Event.$$";
         unlink $visit_file if -f $visit_file;
         unlink $event_file if -f $event_file;
 
