@@ -25,14 +25,11 @@ my $Event_fields = 'visit_id, user_id, channel_id, type_id, refer_id, msecs, tim
 
 # Get the options
 
-my ($session_age_in_mins, $sites, $server, $reseller_id);
-GetOptions("session_age_in_mins=i"  => \$session_age_in_mins,
-           "sites:s"                => \$sites,
+my ($sites, $server, $reseller_id);
+GetOptions("sites:s"                => \$sites,
            "server=s"               => \$server,    # server receiving the data
            "reseller:i"             => \$reseller_id, # optional reseller
            );
-
-my $Grace_period = ($session_age_in_mins + 20) * 60; # add 20 mins just in case
 
 # Feed data for all sites in the list
 
@@ -40,6 +37,7 @@ $reseller_id += 0; # just to be safe!
 my $hostname = $ENV{HOSTNAME};
 my @sites = $reseller_id ? Data::Site->matching("reseller_id=$reseller_id and status='L'") : ();
 my @site_ids = $sites ? split(',', $sites) : map {$_->{site_id}} @sites;
+my $time = time() - 10 * 60;
 foreach my $site_id (@site_ids)
 {
     eval {
@@ -56,13 +54,8 @@ foreach my $site_id (@site_ids)
 
         # Get data from the local data server
 
-        $ds_local->sql("select max(time) - $Grace_period from $stats.Visit into \@visit_time");
-        $ds_local->sql("select $Visit_fields from $stats.Visit where time <= \@visit_time into outfile '$visit_file'");
-        $ds_local->sql("delete from $stats.Visit where time <= \@visit_time");
-
-        $ds_local->sql("select max(time) - $Grace_period from $stats.Event into \@event_time");
-        $ds_local->sql("select $Event_fields from $stats.Event where time <= \@event_time into outfile '$event_file'");
-        $ds_local->sql("delete from $stats.Event where time <= \@event_time");
+        $ds_local->sql("select $Visit_fields from $stats.Visit where time >= $time into outfile '$visit_file'");
+        $ds_local->sql("select $Event_fields from $stats.Event where time >= $time into outfile '$event_file'");
 
         # Connect to the remote data server
 

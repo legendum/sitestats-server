@@ -27,7 +27,6 @@ pagesync:
 
 durations:
     desc: Update the duration column of Visit tables in stats databases
-    host: ho2.legendum.net
     when:
         hours: all
         mins: [5, 15, 25, 35, 45, 55]
@@ -38,14 +37,12 @@ durations:
 
 feeder:
     desc: Feed data from our backup tables into esp-sql11.e-space.se
-    host: ho2.legendum.net
     when:
         hours: all
         mins: [0, 10, 20, 30, 40, 50]
     args:
         reseller: 245
         server: esp-sql11-sweden
-        session_age_in_mins: 30
 
 fixer:
     desc: Find missing reports and fix them by generating them
