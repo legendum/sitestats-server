@@ -1,0 +1,16 @@
+default:
+    driver: mysql
+    host: ho1.legendum.net
+    username: sitestats
+    password: reborn15
+    database: site
+    auto_commit: true
+    insert_delayed: false
+
+ho1.legendum.net:
+    host: ho1.legendum.net
+
+esp-sql11-sweden:
+    host: qv.e-space.se
+    username: root
+    password: 54kyLhjlo3Nr
