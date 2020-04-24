@@ -135,7 +135,7 @@ sub write_file
     # Create a data server query
 
     my $database = $site->database();
-    my $query = $self->{dbh}->prepare("select E.*, V.*, E.visit_id, E.time as event_time from $database.$self->{event_table} E, $database.$self->{visit_table} V where E.visit_id = V.visit_id and V.time between ? and ? order by V.visit_id, E.time", {'mysql_use_result' => $optimize});
+    my $query = $self->{dbh}->prepare("select E.*, V.*, E.visit_id, E.time as event_time from $database.$self->{event_table} E, $database.$self->{visit_table} V where E.visit_id = V.visit_id and E.time between ? and ? order by V.visit_id, E.time", {'mysql_use_result' => $optimize});
     $query->execute($start_time, $end_time);
     my $last_visit_id = 0;
     my $last_channel_id = 0;
