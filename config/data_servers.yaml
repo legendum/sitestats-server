@@ -12,8 +12,3 @@ ho1.legendum.net:
 
 ho2.legendum.net:
     host: ho2.legendum.net
-
-esp-sql11-sweden:
-    host: qv.e-space.se
-    username: root
-    password: 54kyLhjlo3Nr
