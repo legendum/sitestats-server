@@ -184,6 +184,7 @@ sub write_channel_report
         if ($limit && $count++ <= $limit)
         {
             $field =~ s/\\(x\w{2})/&#$1;/g; # turn "\xAB" into HTML "&$xAB;"
+            $field = substr($field, 0, 255); # enforce the max field length
             Data::Site->sql($sql, $date, $channel_id, $report_id, $field, int($value));
         }
         else
