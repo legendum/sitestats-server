@@ -21,7 +21,7 @@ while (<DF>)
 {
 	chomp;
 	my ($dev, $kbytes, $used, $avail, $capacity, $mount) = split;
-	next unless $dev =~ /dev/;
+	next unless $dev =~ /dev\/md/;
 	$capacity =~ s/%$//;
 	if ($capacity >= TOO_FULL_OF_DATA)
 	{
