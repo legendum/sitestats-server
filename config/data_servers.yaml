@@ -1,14 +1,11 @@
 default:
     driver: mysql
-    host: ho1.legendum.net
+    host: ho2.legendum.net
     username: sitestats
     password: reborn15
     database: site
     auto_commit: true
     insert_delayed: false
 
-ho1.legendum.net:
-    host: ho1.legendum.net
-
-ho2.legendum.net:
-    host: ho2.legendum.net
+de2.legendum.net:
+    host: de2.legendum.net
